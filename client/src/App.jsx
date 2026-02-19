@@ -5,6 +5,7 @@ import Moviecard from "./compoents/Moviecard";
 import { useDebounce } from "react-use";
 import { getTrendingMovies, updatecounter } from "./appwrite";
 import { Databases } from "appwrite";
+import TrendingMovies from "./compoents/TrendingMovies";
 
 const API_BASE_URL = "https://api.themoviedb.org/3";
 
@@ -20,16 +21,22 @@ const API_OPTIONS = {
 const metric = import.meta.env.VITE_APPWRITE_COLLECTION_ID;
 
 const App = () => {
+  const [debouncedSearchTerm, setDebounceSearchTerm] = useState("");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [errroMessage, setErrorMessage] = useState("");
   const [movielist, setmovielist] = useState([]);
   const [isLoading, setisLoading] = useState(false);
-  const [debouncedSearchTerm, setDebounceSearchTerm] = useState("");
+  const [topRatedisLoading, setTopisRatedisLoading] = useState(false);
   const [trendingmovies, setTrendingMovies] = useState([]);
+  const[page, setPage]=useState(1);
+  const[hasMore , sethasMore]=useState(true);
+
 
   useDebounce(() => setDebounceSearchTerm(searchTerm), 600, [searchTerm]);
 
   useEffect(() => {
+    setPage(1);
     fetchMovies(debouncedSearchTerm);
   }, [debouncedSearchTerm]);
 
@@ -37,7 +44,14 @@ const App = () => {
     loadtrendingmovies();
   }, []);
 
-  const fetchMovies = async (query = "") => {
+const loadMoreMovies = () => {
+  const nextPage = page + 1;
+  setPage(nextPage);
+  fetchMovies(debouncedSearchTerm, nextPage);
+};
+
+
+  const fetchMovies = async (query = "",pageNUm=1) => {
     setisLoading(true);
     setErrorMessage("");
     try {
@@ -59,9 +73,11 @@ const App = () => {
       //  return;
       // }
 
-      setmovielist(data.results || []);
+      // setmovielist(data.results || []);
+      setmovielist(prev=> pageNUm===1 ? data.results : [...prev,...data.results])
+        sethasMore(pageNUm <data.total_pages)
 
-      if (query && data.results.length > 0) {
+      if (query && pageNUm===1 && data.results.length > 0) {
         await updatecounter(query, data.results[0]);
       }
     } catch (error) {
@@ -73,7 +89,7 @@ const App = () => {
   };
 
   const loadtrendingmovies = async () => {
-    setisLoading(true);
+    setTopisRatedisLoading(true);
     setErrorMessage("");
     try {
       const movie = await getTrendingMovies();
@@ -85,7 +101,7 @@ const App = () => {
       console.log(`Error loading trending movies ${error}`);
       setErrorMessage("Error fetching trending movies");
     } finally {
-      setisLoading(false);
+      setTopisRatedisLoading(false);
     }
   };
 
@@ -107,22 +123,15 @@ const App = () => {
           {trendingmovies.length > 0 && (
             <section className="trending">
               <h2>Trending Movies</h2>
-
-              {isLoading ? (
+              {topRatedisLoading ? (
                 <div className="text-white">
                   <Spinner />
                 </div>
               ) : errroMessage ? (
                 <p className="text-red-500">{errroMessage}</p>
               ) : (
-                <ul>
-                  {trendingmovies.map((movie, index) => (
-                    <li key={movie.$id}>
-                      <p>{index + 1}</p>
-                      <img src={movie.poster_url} alt={movie.title} />
-                    </li>
-                  ))}
-                </ul>
+                <TrendingMovies  trendingmovies={trendingmovies}/>
+        
               )}
             </section>
           )}
@@ -144,6 +153,13 @@ const App = () => {
               </ul>
             )}
           </section>
+          {hasMore && !isLoading && (
+            <div className="flex justify-center mt-6">
+              <button onClick={loadMoreMovies}
+              className="px-6 py-2 rounded-lg bg-indigo-400 hover:bg-indigo-600"
+              > Load more</button>
+            </div>
+          )}
         </div>
       </div>
     </main>
